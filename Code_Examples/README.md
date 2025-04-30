@@ -16,7 +16,7 @@ The client RDMA writes into server memory with a small message.
 
 # Run RDMA client and server with cma
 
-cd cop5611
+
 
 make 
 
