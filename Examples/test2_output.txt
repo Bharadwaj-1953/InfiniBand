@@ -1,0 +1,39 @@
+Rank 0: HH - Freq: 29; Loc (<= 7): 846 871 927 2230 4774 4807 4871
+Rank 1: SRC - Freq: 22; Loc (<= 7): 830 855 911 1399 1437 1506 2375
+Rank 2: PRED - Freq: 30; Loc (<= 7): 1407 1445 1514 2213 2383 2413 2474
+Rank 3: TID - Freq: 21; Loc (<= 7): 3605 3727 3803 3883 4122 4644 5344
+Rank 4: INST - Freq: 18; Loc (<= 7): 3231 3274 3521 3566 3933 3952 4018
+Rank 5: 0400 - Freq: 19; Loc (<= 7): 651 956 1221 1495 1564 2455 2516
+Rank 6: IF - Freq: 25; Loc (<= 7): 3200 3227 3260 3380 3517 3552 3929
+Rank 7: CPU - Freq: 40; Loc (<= 7): 834 859 915 1403 1441 1510 2209
+
+====== ====== ====== ====== 
+   Starting the query ... 
+====== ====== ====== ====== 
+FSU - Freq: 2; Loc (<= 7): 20 127
+IS - Freq: 3; Loc (<= 7): 5923 6033 7851
+LEADING - Freq: 0
+A - Freq: 12; Loc (<= 7): 853 1435 2403 2763 3388 4425 4781
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 11; Loc (<= 7): 463 1937 2065 6041 6118 6224 7764
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 4; Loc (<= 7): 24 281 317 406
+STUDENTS - Freq: 3; Loc (<= 7): 38 233 367
+IN - Freq: 7; Loc (<= 7): 403 1768 3176 4257 9084 10484 11426
+THE - Freq: 23; Loc (<= 7): 254 313 1754 3179 3425 4260 4462
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 9; Loc (<= 7): 17 69 124 1631 1691 1751 1929
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+UNIVERSITY - Freq: 1; Loc (<= 7): 258
+HAS - Freq: 0
+OFFER - Freq: 0

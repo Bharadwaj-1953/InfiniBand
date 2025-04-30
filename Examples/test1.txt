@@ -1,0 +1,17 @@
+About 25 percent of FSU undergraduate students currently conduct out-of-class
+research with research mentors, with hundreds of FSU undergraduates
+co-authoring research publications and presentations with faculty members and
+graduate students every year. The university's signature undergraduate
+research program, the Undergraduate Research Opportunity Program, helps
+students from any major participate in undergraduate research by serving as
+research assistants to faculty members and others across campus.
+
+In a file called analysis.txt, write up your analysis of the complexity analysis of the important algorithms and procedures in your program. Note that your analyses will be based on not only the code YOU write, but also on the nature of STL containers that manage your data. Your analyses need to include complexity analysis of at least (but not limited to) each of these necessary tasks: 
+-- Reading the input set
+-- Storing the characters and words in the containers, and setting their tracking values
+-- Looking up the final tracking info on your character and word frequencies
+-- Determine and report the lists of "Top Ten" most frequent characters and words.
+-- Any other important factors you feel important in completing the frequency counting.
+
+While not a program requirement for submission, it is recommended that you verify your analysis of your program elements by testing larger input sets and also by measuring the actual run time speed of those test runs. You can do this in a program easily by using the ctime library and capturing the returns from the clock() function before and after an algorithm, then subtract the two clock times to see the difference.
+

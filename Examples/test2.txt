@@ -1,0 +1,352 @@
+About 25 percent of FSU undergraduate students currently conduct out-of-class
+research with research mentors, with hundreds of FSU undergraduates
+co-authoring research publications and presentations with faculty members and
+graduate students every year. The university's signature undergraduate
+research program, the Undergraduate Research Opportunity Program, helps
+students from any major participate in undergraduate research by serving as
+research assistants to faculty members and others across campus.
+
+exporting patches:
+# HG changeset patch
+# User "Charles Reiss <creiss@virginia.edu>"
+# Date 1474905800 14400
+#      Mon Sep 26 12:03:20 2016 -0400
+# Node ID 7bd57a4b4134d4b9d44bb264216c983ad1ac797b
+# Parent  2c111e634da005e2b78981fadd0368662454f2ed
+Increase maximum processor width.
+
+diff -r 2c111e634da0 -r 7bd57a4b4134 src/cpu/o3/impl.hh
+--- a/src/cpu/o3/impl.hh	Thu Sep 22 14:46:37 2016 +0100
++++ b/src/cpu/o3/impl.hh	Mon Sep 26 12:03:20 2016 -0400
+@@ -76,7 +76,7 @@
+     typedef O3CPU CPUType;
+ 
+     enum {
+-      MaxWidth = 8,
++      MaxWidth = 32,
+       MaxThreads = 4
+     };
+ };
+# HG changeset patch
+# User "Charles Reiss <creiss@virginia.edu>"
+# Date 1474906013 14400
+#      Mon Sep 26 12:06:53 2016 -0400
+# Node ID a8fe92b5b20a999923577bafb94f3a0288aabb6e
+# Parent  7bd57a4b4134d4b9d44bb264216c983ad1ac797b
+Add NeverTaken branch predictor.
+
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/BranchPredictor.py
+--- a/src/cpu/pred/BranchPredictor.py	Mon Sep 26 12:03:20 2016 -0400
++++ b/src/cpu/pred/BranchPredictor.py	Mon Sep 26 12:06:53 2016 -0400
+@@ -39,6 +39,7 @@
+     numThreads = Param.Unsigned(1, "Number of threads")
+     BTBEntries = Param.Unsigned(4096, "Number of BTB entries")
+     BTBTagSize = Param.Unsigned(16, "Size of the BTB tags, in bits")
++    useRAS = Param.Bool(True, "Use return address stack")
+     RASSize = Param.Unsigned(16, "RAS size")
+     instShiftAmt = Param.Unsigned(2, "Number of bits to shift instructions by")
+ 
+@@ -51,7 +52,13 @@
+     indirectPathLength = Param.Unsigned(3,
+         "Previous indirect targets to use for path history")
+ 
++class NeverTakenBP(BranchPredictor):
++    type = 'NeverTakenBP'
++    cxx_class = 'NeverTakenBP'
++    cxx_header = 'cpu/pred/never_taken.hh'
+ 
++    useRAS = False
++    useIndirect = False
+ 
+ class LocalBP(BranchPredictor):
+     type = 'LocalBP'
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/SConscript
+--- a/src/cpu/pred/SConscript	Mon Sep 26 12:03:20 2016 -0400
++++ b/src/cpu/pred/SConscript	Mon Sep 26 12:06:53 2016 -0400
+@@ -43,6 +43,7 @@
+ Source('ras.cc')
+ Source('tournament.cc')
+ Source ('bi_mode.cc')
++Source('never_taken.cc')
+ DebugFlag('FreeList')
+ DebugFlag('Branch')
+ DebugFlag('LTage')
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/bpred_unit.cc
+--- a/src/cpu/pred/bpred_unit.cc	Mon Sep 26 12:03:20 2016 -0400
++++ b/src/cpu/pred/bpred_unit.cc	Mon Sep 26 12:06:53 2016 -0400
+@@ -61,6 +61,7 @@
+           params->BTBTagSize,
+           params->instShiftAmt,
+           params->numThreads),
++      useRAS(params->useRAS),
+       RAS(numThreads),
+       useIndirect(params->useIndirect),
+       iPred(params->indirectHashGHR,
+@@ -214,7 +215,7 @@
+ 
+     // Now lookup in the BTB or RAS.
+     if (pred_taken) {
+-        if (inst->isReturn()) {
++        if (useRAS && inst->isReturn()) {
+             ++usedRAS;
+             predict_record.wasReturn = true;
+             // If it's a function return call, then look up the address
+@@ -235,7 +236,7 @@
+         } else {
+             ++BTBLookups;
+ 
+-            if (inst->isCall()) {
++            if (useRAS && inst->isCall()) {
+                 RAS[tid].push(pc);
+                 predict_record.pushedRAS = true;
+ 
+@@ -270,7 +271,8 @@
+                         btbUpdate(tid, pc.instAddr(), bp_history);
+                         DPRINTF(Branch, "[tid:%i]:[sn:%i] btbUpdate"
+                                 " called for %s\n", tid, seqNum, pc);
+-                    } else if (inst->isCall() && !inst->isUncondCtrl()) {
++                    } else if (useRAS && inst->isCall() &&
++                               !inst->isUncondCtrl()) {
+                         RAS[tid].pop();
+                         predict_record.pushedRAS = false;
+                     }
+@@ -366,7 +368,7 @@
+ 
+     // Now lookup in the BTB or RAS.
+     if (pred_taken) {
+-        if (inst->isReturn()) {
++        if (useRAS && inst->isReturn()) {
+             ++usedRAS;
+ 
+             // If it's a function return call, then look up the address
+@@ -390,7 +392,7 @@
+         } else {
+             ++BTBLookups;
+ 
+-            if (inst->isCall()) {
++            if (useRAS && inst->isCall()) {
+ 
+                 RAS[tid].push(instPC);
+                 predict_record.pushedRAS = true;
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/bpred_unit.hh
+--- a/src/cpu/pred/bpred_unit.hh	Mon Sep 26 12:03:20 2016 -0400
++++ b/src/cpu/pred/bpred_unit.hh	Mon Sep 26 12:06:53 2016 -0400
+@@ -51,10 +51,10 @@
+ 
+ #include "base/statistics.hh"
+ #include "base/types.hh"
++#include "cpu/inst_seq.hh"
+ #include "cpu/pred/btb.hh"
+ #include "cpu/pred/indirect.hh"
+ #include "cpu/pred/ras.hh"
+-#include "cpu/inst_seq.hh"
+ #include "cpu/static_inst.hh"
+ #include "params/BranchPredictor.hh"
+ #include "sim/probe/pmu.hh"
+@@ -213,8 +213,9 @@
+                          bool pred_taken, void *bp_history,
+                          ThreadID _tid)
+             : seqNum(seq_num), pc(instPC), bpHistory(bp_history), RASTarget(0),
+-              RASIndex(0), tid(_tid), predTaken(pred_taken), usedRAS(0), pushedRAS(0),
+-              wasCall(0), wasReturn(0), wasSquashed(0), wasIndirect(0)
++              RASIndex(0), tid(_tid), predTaken(pred_taken), usedRAS(0),
++              pushedRAS(0), wasCall(0), wasReturn(0), wasSquashed(0),
++              wasIndirect(0)
+         {}
+ 
+         bool operator==(const PredictorHistory &entry) const {
+@@ -269,7 +270,6 @@
+     /** Number of the threads for which the branch history is maintained. */
+     const unsigned numThreads;
+ 
+-
+     /**
+      * The per-thread predictor history. This is used to update the predictor
+      * as instructions are committed, or restore it to the proper state after
+@@ -280,6 +280,9 @@
+     /** The BTB. */
+     DefaultBTB BTB;
+ 
++    /** Option to disable the return address stack. */
++    const bool useRAS;
++
+     /** The per-thread return address stack. */
+     std::vector<ReturnAddrStack> RAS;
+ 
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/never_taken.cc
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/src/cpu/pred/never_taken.cc	Mon Sep 26 12:06:53 2016 -0400
+@@ -0,0 +1,30 @@
++
++#include "cpu/pred/never_taken.hh"
++
++NeverTakenBP::NeverTakenBP(const NeverTakenBPParams *params)
++    : BPredUnit(params)
++{
++}
++
++void NeverTakenBP::uncondBranch(ThreadID tid, Addr pc, void * &bp_history) {
++    /* do nothing */
++}
++
++bool NeverTakenBP::lookup(ThreadID tid, Addr instPC, void * &bp_history) {
++    return false; // predict not taken
++}
++
++void NeverTakenBP::btbUpdate(ThreadID tid, Addr instPC, void * &bp_history) {
++    /* do nothing */
++}
++
++void NeverTakenBP::update(ThreadID tid, Addr instPC, bool taken,
++                          void *bp_history, bool squashed) {
++    /* do nothing */
++}
++
++NeverTakenBP*
++NeverTakenBPParams::create()
++{
++    return new NeverTakenBP(this);
++}
+diff -r 7bd57a4b4134 -r a8fe92b5b20a src/cpu/pred/never_taken.hh
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/src/cpu/pred/never_taken.hh	Mon Sep 26 12:06:53 2016 -0400
+@@ -0,0 +1,45 @@
++/*
++ * Written by Charles Reiss.
++ */
++
++#ifndef __CPU_PRED_NEVER_TAKEN_HH__
++#define __CPU_PRED_NEVER_TAKEN_HH__
++
++#include <vector>
++
++#include "base/types.hh"
++#include "cpu/pred/bpred_unit.hh"
++#include "params/NeverTakenBP.hh"
++
++/**
++ * Implements a local predictor that uses the PC to index into a table of
++ * counters.  Note that any time a pointer to the bp_history is given, it
++ * should be NULL using this predictor because it does not have any branch
++ * predictor state that needs to be recorded or updated; the update can be
++ * determined solely by the branch being taken or not taken.
++ */
++class NeverTakenBP : public BPredUnit
++{
++  public:
++    /**
++     * Default branch predictor constructor.
++     */
++    NeverTakenBP(const NeverTakenBPParams *params);
++
++    virtual void uncondBranch(ThreadID tid, Addr pc, void * &bp_history);
++
++    bool lookup(ThreadID tid, Addr branch_addr, void * &bp_history);
++    void btbUpdate(ThreadID tid, Addr branch_addr, void * &bp_history);
++    void update(ThreadID tid, Addr branch_addr, bool taken, void *bp_history,
++                bool squashed);
++    void retireSquashed(ThreadID tid, void *bp_history)
++    { assert(bp_history == NULL); }
++    void squash(ThreadID tid, void *bp_history)
++    { assert(bp_history == NULL); }
++
++    void reset();
++
++  private:
++};
++
++#endif // __CPU_PRED_NEVER_TAKEN_HH__
+# HG changeset patch
+# User "Charles Reiss <creiss@virginia.edu>"
+# Date 1475072947 14400
+#      Wed Sep 28 10:29:07 2016 -0400
+# Node ID 43e37d6beed93a4279236383fc0566c9ec7182a3
+# Parent  a8fe92b5b20a999923577bafb94f3a0288aabb6e
+Change in-flight instruction limit.
+
+diff -r a8fe92b5b20a -r 43e37d6beed9 src/cpu/base_dyn_inst_impl.hh
+--- a/src/cpu/base_dyn_inst_impl.hh	Mon Sep 26 12:06:53 2016 -0400
++++ b/src/cpu/base_dyn_inst_impl.hh	Wed Sep 28 10:29:07 2016 -0400
+@@ -114,12 +114,12 @@
+ #ifndef NDEBUG
+     ++cpu->instcount;
+ 
+-    if (cpu->instcount > 1500) {
++    if (cpu->instcount > 15000) {
+ #ifdef DEBUG
+         cpu->dumpInsts();
+         dumpSNList();
+ #endif
+-        assert(cpu->instcount <= 1500);
++        assert(cpu->instcount <= 15000);
+     }
+ 
+     DPRINTF(DynInst,
+# HG changeset patch
+# User "Charles Reiss <creiss@virginia.edu>"
+# Date 1475116857 14400
+#      Wed Sep 28 22:40:57 2016 -0400
+# Node ID d833730096f25e79e89feec4d5a4df844c2f91b8
+# Parent  43e37d6beed93a4279236383fc0566c9ec7182a3
+Support for statically linking tcmalloc/libprotobuf.
+
+diff -r 43e37d6beed9 -r d833730096f2 SConstruct
+--- a/SConstruct	Wed Sep 28 10:29:07 2016 -0400
++++ b/SConstruct	Wed Sep 28 22:40:57 2016 -0400
+@@ -197,7 +197,6 @@
+                help='Build with Undefined Behavior Sanitizer if available')
+ AddLocalOption('--with-asan', dest='with_asan', action='store_true',
+                help='Build with Address Sanitizer if available')
+-
+ termcap = get_termcap(GetOption('use_colors'))
+ 
+ ########################################################################
+@@ -209,7 +208,8 @@
+ # export TERM so that clang reports errors in color
+ use_vars = set([ 'AS', 'AR', 'CC', 'CXX', 'HOME', 'LD_LIBRARY_PATH',
+                  'LIBRARY_PATH', 'PATH', 'PKG_CONFIG_PATH', 'PROTOC',
+-                 'PYTHONPATH', 'RANLIB', 'SWIG', 'TERM' ])
++                 'PYTHONPATH', 'RANLIB', 'SWIG', 'TERM',
++                 'PROTOBUFLIB', 'TCMALLOCLIB', ])
+ 
+ use_prefixes = [
+     "ASAN_",           # address sanitizer symbolizer path and settings
+@@ -497,6 +497,8 @@
+     ('CXX', 'C++ compiler', environ.get('CXX', main['CXX'])),
+     ('SWIG', 'SWIG tool', environ.get('SWIG', main['SWIG'])),
+     ('PROTOC', 'protoc tool', environ.get('PROTOC', 'protoc')),
++    ('PROTOBUFLIB', 'protobuf library', environ.get('PROTOBUFLIB', '')),
++    ('TCMALLOCLIB', 'tcmalloc library', environ.get('TCMALLOCLIB', '')),
+     ('BATCH', 'Use batch pool for build and tests', False),
+     ('BATCH_CMD', 'Batch pool submission command name', 'qdo'),
+     ('M5_BUILD_CACHE', 'Cache built objects in this directory', False),
+@@ -1042,9 +1044,13 @@
+ # automatically added to the LIBS environment variable. After
+ # this, we can use the HAVE_PROTOBUF flag to determine if we have
+ # got both protoc and libprotobuf available.
+-main['HAVE_PROTOBUF'] = main['PROTOC'] and \
+-    conf.CheckLibWithHeader('protobuf', 'google/protobuf/message.h',
+-                            'C++', 'GOOGLE_PROTOBUF_VERIFY_VERSION;')
++if main['PROTOBUFLIB']:
++    main['HAVE_PROTOBUF'] = True
++    main.Append(LIBS=File(main['PROTOBUFLIB']))
++else:  
++    main['HAVE_PROTOBUF'] = main['PROTOC'] and \
++        conf.CheckLibWithHeader('protobuf', 'google/protobuf/message.h',
++                                'C++', 'GOOGLE_PROTOBUF_VERIFY_VERSION;')
+ 
+ # If we have the compiler but not the library, print another warning.
+ if main['PROTOC'] and not main['HAVE_PROTOBUF']:
+@@ -1065,7 +1071,11 @@
+                             'timer_create(CLOCK_MONOTONIC, NULL, NULL);')
+ 
+ if not GetOption('without_tcmalloc'):
+-    if conf.CheckLib('tcmalloc'):
++    if main['TCMALLOCLIB']:
++        main.Append(LIBS=File(main['TCMALLOCLIB']))
++        conf.CheckLib('unwind')
++        main.Append(CCFLAGS=main['TCMALLOC_CCFLAGS'])
++    elif conf.CheckLib('tcmalloc'):
+         main.Append(CCFLAGS=main['TCMALLOC_CCFLAGS'])
+     elif conf.CheckLib('tcmalloc_minimal'):
+         main.Append(CCFLAGS=main['TCMALLOC_CCFLAGS'])

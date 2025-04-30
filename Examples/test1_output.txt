@@ -1,0 +1,39 @@
+Rank 0: IN - Freq: 6; Loc (<= 7): 403 509 633 960 1223 1496
+Rank 1: OF - Freq: 11; Loc (<= 7): 17 69 124 563 590 743 834
+Rank 2: RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+Rank 3: PROGRAM - Freq: 6; Loc (<= 7): 304 352 641 1274 1366 1501
+Rank 4: AND - Freq: 12; Loc (<= 7): 181 220 482 618 950 979 1069
+Rank 5: BY - Freq: 4; Loc (<= 7): 429 1383 1421 1516
+Rank 6: THE - Freq: 18; Loc (<= 7): 254 313 566 593 700 732 910
+Rank 7: YOUR - Freq: 8; Loc (<= 7): 549 636 660 773 784 1054 1344
+
+====== ====== ====== ====== 
+   Starting the query ... 
+====== ====== ====== ====== 
+FSU - Freq: 2; Loc (<= 7): 20 127
+IS - Freq: 1; Loc (<= 7): 1313
+LEADING - Freq: 0
+A - Freq: 3; Loc (<= 7): 512 1272 1499
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 4; Loc (<= 7): 463 803 863 1660
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 4; Loc (<= 7): 24 281 317 406
+STUDENTS - Freq: 3; Loc (<= 7): 38 233 367
+IN - Freq: 6; Loc (<= 7): 403 509 633 960 1223 1496
+THE - Freq: 18; Loc (<= 7): 254 313 566 593 700 732 910
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 11; Loc (<= 7): 17 69 124 563 590 743 834
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+UNIVERSITY - Freq: 1; Loc (<= 7): 258
+HAS - Freq: 0
+OFFER - Freq: 0
