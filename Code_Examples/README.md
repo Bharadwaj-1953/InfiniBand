@@ -1,7 +1,6 @@
 # Run RDMA client and server without cma
 
 ```
-cd cop5611
 
 make 
 
