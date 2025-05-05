@@ -1,0 +1,471 @@
+
+											Complexity Analysis
+
+This document provides a complexity analysis of the major algorithms and procedures used in the implementation of the distributed hash table for word counting. 
+The analysis includes both the code written for the project and the characteristics of data structures used. 
+Key tasks such as reading the input, storing and managing words, querying, and reporting results are analyzed.
+
+1. Reading the Input Set: The input file is divided into chunks and distributed to processes. Each process reads its assigned chunk independently.
+   Time Complexity: O(n/p), where `n` is the file size and `p` is the number of processes.
+   Space Complexity: O(n/p) per process to store the local chunk in memory.
+
+2. Storing Words in Containers: Words are extracted, converted to uppercase, hashed, and stored in the distributed hash table. The hash table buckets are checked or updated for each word.
+   Time Complexity: O(c + w × b/p), where `c` is the chunk size, `w` is the number of characters, and `b` is the average bucket size.
+   Space Complexity: O(B × b) per process, where `B` is the number of buckets, and `b` is the average bucket size.
+
+3. Querying Word Frequencies: Query words are hashed, and RDMA reads retrieve their frequency and location from the distributed hash table.
+   Time Complexity: O(q × (k + b)), where `q` is the number of query words, `k` is the average word length, and `b` is the average bucket size.
+   Space Complexity: O(1) for query words retrieved at runtime, as no additional storage is required.
+
+4. Finding Most Frequent Words: Each process scans its hash table buckets to identify the most frequent word and sorts its locations.
+   Time Complexity: O(B × b), where `B` is the number of buckets and `b` is the average bucket size.
+   Space Complexity: O(1) for temporary storage during scans.
+
+5. MPI Communication: Distributing file chunk sizes, RDMA connection details, and synchronization involves MPI communication.
+   Time Complexity: O(p²), due to all-to-all communication.
+   Space Complexity: O(p) per process for storing communication metadata (e.g., chunk sizes and RDMA connection details).
+
+Overall Time Complexity: The overall time complexity is dominated by the largest term, which is O(q × (k + b)) for querying, 
+                         combined with O(p²) for MPI communication in large-scale distributed setups.
+
+Overall Space Complexity: The overall space complexity is O(B × b + n/p), 
+                          where `B × b` accounts for the distributed hash table and `n/p` accounts for the file chunk storage per process.
+
+
+											
+											Key Implementation Details
+
+
+1. RDMA Read Operations:
+     RDMA read is implemented to fetch data from remote hash tables during the query phase.
+     Each query word is hashed to determine the target process and bucket.
+     Using the hash value, the querying process calculates the remote memory address of the bucket in the target process.
+     The RDMA read is initiated with `ibv_post_send` and ensures low-latency retrieval of the required data.
+     The completion of the RDMA read is verified using the `check_rdma_completion` function, which polls the completion queue until the operation succeeds.
+
+2. Memory Management:
+     The hash table memory is allocated using `calloc` and aligned with the system page size via `posix_memalign` to ensure RDMA compatibility.
+     This memory is registered with the RDMA protection domain using `ibv_reg_mr`, allowing remote access for both reads and potential writes.
+
+3. Connection Setup:
+     Each process shares its memory registration details, including remote keys and memory addresses, with all other processes using `MPI_Allgather`.
+     These connection details are stored in a shared structure (`connection_details`) and used for all RDMA operations.
+
+
+
+The files and their respective sizes used for testing the `dht_count.c` file are listed below:
+1. test1.txt - 1.7KB
+2. test2.txt - 13.0KB
+3. query.txt - 211B
+4. input1m.txt - 1.0MB
+5. input4m.txt - 4.0MB
+6. input64m.txt - 64.0MB
+7. input256m.txt - 256.0MB
+8. input512m.txt - 512.0MB
+9. input1g.txt - 1021.0MB
+
+These files range from small test cases for functional validation to large files for performance and scalability analysis.
+
+
+The configuration of the host file to run across various 8 nodes (2 Processes on each node):
+ns01-ib0 slots=2
+ns02-ib0 slots=2
+ns03-ib0 slots=2
+ns04-ib0 slots=2
+
+
+
+											Performance Testing
+
+
+The program was tested using `query.txt` as the query file and the input files of various sizes: 1MB, 4MB, 64MB, 256MB, and 512MB. 
+Each test case was executed 3 times, and the average execution times were recorded.
+
+Performance Results (Execution Times in Seconds):
+
++-----------+--------------+-----------+-----------+-----------+--------------------+
+| File_Size |  File_Name   | Run_1 (s) | Run_2 (s) | Run_3 (s) | Average_Run_Time   |
++-----------+--------------+-----------+-----------+-----------+--------------------+
+|    1MB    | input1m.txt  |  13.070   |  13.469   |  13.332   |       13.290       |
+|    4MB    |  input4.txt  |  13.245   |  13.905   |  13.740   |       13.630       |
+|   64MB    | input64.txt  |  13.947   |  14.052   |  13.962   |       13.987       |
+|  256MB    | input256.txt |  17.321   |  17.685   |  17.536   |       17.514       |
+|  512MB    | input512.txt |  23.720   |  23.956   |  23.417   |       23.698       |
++-----------+--------------+-----------+-----------+-----------+--------------------+
+
+
+										Observations on Performance and Scalability Trends
+
+
+The execution time increases consistently as the file size grows, showing a linear trend. 
+This indicates that the distributed hash table and RDMA operations handle increasing workloads efficiently, making the implementation scalable for larger datasets.
+
+The average run times for the same file size across three runs are highly consistent, with minimal variations. 
+This demonstrates that the implementation is stable and reliable under repeated executions, regardless of the input size.
+
+For smaller files such as 1MB to 64MB, the execution time increases only slightly. 
+This shows that communication and data distribution overheads are minimal for smaller workloads. 
+However, for larger files like 256MB and 512MB, the execution time increases more significantly. 
+This is expected as the size of the hash table and the number of RDMA operations required to handle the data grow with the input size.
+
+The use of RDMA read operations plays a crucial role in ensuring low-latency data retrieval. 
+This efficiency is evident in the program's ability to query the distributed hash table even for large files without significant performance degradation.
+
+Overall, the program demonstrates strong scalability and consistent performance, effectively managing both small and large workloads while maintaining efficiency and reliability.
+
+
+
+												Outputs
+
+
+
+The outputs for the 'dht_count' when tested with the same 'query.txt' with the various input files are 
+
+1. test1.txt (1.7KB)
+
+Rank 0: IN - Freq: 6; Loc (<= 7): 403 509 633 960 1223 1496
+Rank 1: OF - Freq: 11; Loc (<= 7): 17 69 124 563 590 743 834
+Rank 2: RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+Rank 3: PROGRAM - Freq: 6; Loc (<= 7): 304 352 641 1274 1366 1501
+Rank 4: AND - Freq: 12; Loc (<= 7): 181 220 482 618 950 979 1069
+Rank 5: BY - Freq: 4; Loc (<= 7): 429 1383 1421 1516
+Rank 6: THE - Freq: 18; Loc (<= 7): 254 313 566 593 700 732 910
+Rank 7: YOUR - Freq: 8; Loc (<= 7): 549 636 660 773 784 1054 1344
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 2; Loc (<= 7): 20 127
+IS - Freq: 1; Loc (<= 7): 1313
+LEADING - Freq: 0
+A - Freq: 3; Loc (<= 7): 512 1272 1499
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 4; Loc (<= 7): 463 803 863 1660
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 4; Loc (<= 7): 24 281 317 406
+STUDENTS - Freq: 3; Loc (<= 7): 38 233 367
+IN - Freq: 6; Loc (<= 7): 403 509 633 960 1223 1496
+THE - Freq: 18; Loc (<= 7): 254 313 566 593 700 732 910
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 11; Loc (<= 7): 17 69 124 563 590 743 834
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+UNIVERSITY - Freq: 1; Loc (<= 7): 258
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+2. test2.txt (13.0KB)
+
+Rank 0: HH - Freq: 29; Loc (<= 7): 846 871 927 2230 4774 4807 4871
+Rank 1: SRC - Freq: 22; Loc (<= 7): 830 855 911 1399 1437 1506 2375
+Rank 2: PRED - Freq: 30; Loc (<= 7): 1407 1445 1514 2213 2383 2413 2474
+Rank 3: TID - Freq: 21; Loc (<= 7): 3605 3727 3803 3883 4122 4644 5344
+Rank 4: INST - Freq: 18; Loc (<= 7): 3231 3274 3521 3566 3933 3952 4018
+Rank 5: 0400 - Freq: 19; Loc (<= 7): 651 956 1221 1495 1564 2455 2516
+Rank 6: IF - Freq: 25; Loc (<= 7): 3200 3227 3260 3380 3517 3552 3929
+Rank 7: CPU - Freq: 40; Loc (<= 7): 834 859 915 1403 1441 1510 2209
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 2; Loc (<= 7): 20 127
+IS - Freq: 3; Loc (<= 7): 5923 6033 7851
+LEADING - Freq: 0
+A - Freq: 12; Loc (<= 7): 853 1435 2403 2763 3388 4425 4781
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 11; Loc (<= 7): 463 1937 2065 6041 6118 6224 7764
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 4; Loc (<= 7): 24 281 317 406
+STUDENTS - Freq: 3; Loc (<= 7): 38 233 367
+IN - Freq: 7; Loc (<= 7): 403 1768 3176 4257 9084 10484 11426
+THE - Freq: 23; Loc (<= 7): 254 313 1754 3179 3425 4260 4462
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 9; Loc (<= 7): 17 69 124 1631 1691 1751 1929
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 7; Loc (<= 7): 78 92 159 295 331 420 443
+UNIVERSITY - Freq: 1; Loc (<= 7): 258
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+3. input1m.txt (1.0MB)
+
+Rank 0: IN - Freq: 4450; Loc (<= 7): 124 451 714 987 1174 1298 1625
+Rank 1: OF - Freq: 7120; Loc (<= 7): 54 81 234 325 363 615 849
+Rank 2: TO - Freq: 2670; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+Rank 3: PROGRAM - Freq: 3560; Loc (<= 7): 132 765 857 992 1306 1939 2031
+Rank 4: AND - Freq: 8010; Loc (<= 7): 109 441 470 560 594 653 903
+Rank 5: BY - Freq: 2670; Loc (<= 7): 874 912 1007 2048 2086 2181 3223
+Rank 6: THE - Freq: 14240; Loc (<= 7): 57 84 191 223 401 426 454
+Rank 7: YOUR - Freq: 7120; Loc (<= 7): 40 127 151 264 275 545 835
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 0
+IS - Freq: 890; Loc (<= 7): 804 1978 3153 4327 5502 6676 7851
+LEADING - Freq: 0
+A - Freq: 2670; Loc (<= 7): 3 763 990 1177 1937 2164 2352
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 2670; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 0
+STUDENTS - Freq: 0
+IN - Freq: 4450; Loc (<= 7): 124 451 714 987 1174 1298 1625
+THE - Freq: 14240; Loc (<= 7): 57 84 191 223 401 426 454
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 7120; Loc (<= 7): 54 81 234 325 363 615 849
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 0
+UNIVERSITY - Freq: 0
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+4. input4m.txt (4.0MB)
+
+Rank 0: IN - Freq: 17810; Loc (<= 7): 124 451 714 987 1174 1298 1625
+Rank 1: OF - Freq: 28496; Loc (<= 7): 54 81 234 325 363 615 849
+Rank 2: TO - Freq: 10686; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+Rank 3: PROGRAM - Freq: 14248; Loc (<= 7): 132 765 857 992 1306 1939 2031
+Rank 4: AND - Freq: 32058; Loc (<= 7): 109 441 470 560 594 653 903
+Rank 5: BY - Freq: 10686; Loc (<= 7): 874 912 1007 2048 2086 2181 3223
+Rank 6: THE - Freq: 56992; Loc (<= 7): 57 84 191 223 401 426 454
+Rank 7: YOUR - Freq: 28496; Loc (<= 7): 40 127 151 264 275 545 835
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 0
+IS - Freq: 3562; Loc (<= 7): 804 1978 3153 4327 5502 6676 7851
+LEADING - Freq: 0
+A - Freq: 10686; Loc (<= 7): 3 763 990 1177 1937 2164 2352
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 10686; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 0
+STUDENTS - Freq: 0
+IN - Freq: 17810; Loc (<= 7): 124 451 714 987 1174 1298 1625
+THE - Freq: 56992; Loc (<= 7): 57 84 191 223 401 426 454
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 28496; Loc (<= 7): 54 81 234 325 363 615 849
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 0
+UNIVERSITY - Freq: 0
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+5. input64m.txt (64.0MB)
+
+Rank 0: IN - Freq: 284940; Loc (<= 7): 124 451 714 987 1174 1298 1625
+Rank 1: OF - Freq: 455904; Loc (<= 7): 54 81 234 325 363 615 849
+Rank 2: TO - Freq: 170964; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+Rank 3: PROGRAM - Freq: 227952; Loc (<= 7): 132 765 857 992 1306 1939 2031
+Rank 4: AND - Freq: 512892; Loc (<= 7): 109 441 470 560 594 653 903
+Rank 5: BY - Freq: 170964; Loc (<= 7): 874 912 1007 2048 2086 2181 3223
+Rank 6: THE - Freq: 911808; Loc (<= 7): 57 84 191 223 401 426 454
+Rank 7: YOUR - Freq: 455904; Loc (<= 7): 40 127 151 264 275 545 835
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 0
+IS - Freq: 56988; Loc (<= 7): 804 1978 3153 4327 5502 6676 7851
+LEADING - Freq: 0
+A - Freq: 170964; Loc (<= 7): 3 763 990 1177 1937 2164 2352
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 170964; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 0
+STUDENTS - Freq: 0
+IN - Freq: 284940; Loc (<= 7): 124 451 714 987 1174 1298 1625
+THE - Freq: 911808; Loc (<= 7): 57 84 191 223 401 426 454
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 455904; Loc (<= 7): 54 81 234 325 363 615 849
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 0
+UNIVERSITY - Freq: 0
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+6. input256m.txt (256.0MB)
+
+Rank 0: IN - Freq: 1139760; Loc (<= 7): 124 451 714 987 1174 1298 1625
+Rank 1: OF - Freq: 1823616; Loc (<= 7): 54 81 234 325 363 615 849
+Rank 2: TO - Freq: 683856; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+Rank 3: PROGRAM - Freq: 911808; Loc (<= 7): 132 765 857 992 1306 1939 2031
+Rank 4: AND - Freq: 2051568; Loc (<= 7): 109 441 470 560 594 653 903
+Rank 5: BY - Freq: 683856; Loc (<= 7): 874 912 1007 2048 2086 2181 3223
+Rank 6: THE - Freq: 3647232; Loc (<= 7): 57 84 191 223 401 426 454
+Rank 7: YOUR - Freq: 1823616; Loc (<= 7): 40 127 151 264 275 545 835
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 0
+IS - Freq: 227952; Loc (<= 7): 804 1978 3153 4327 5502 6676 7851
+LEADING - Freq: 0
+A - Freq: 683856; Loc (<= 7): 3 763 990 1177 1937 2164 2352
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 683856; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 0
+STUDENTS - Freq: 0
+IN - Freq: 1139760; Loc (<= 7): 124 451 714 987 1174 1298 1625
+THE - Freq: 3647232; Loc (<= 7): 57 84 191 223 401 426 454
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 1823616; Loc (<= 7): 54 81 234 325 363 615 849
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 0
+UNIVERSITY - Freq: 0
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+7. input512m.txt (512.0MB)
+
+Rank 0: IN - Freq: 2279510; Loc (<= 7): 124 451 714 987 1174 1298 1625
+Rank 1: OF - Freq: 3647216; Loc (<= 7): 54 81 234 325 363 615 849
+Rank 2: TO - Freq: 1367706; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+Rank 3: PROGRAM - Freq: 1823608; Loc (<= 7): 132 765 857 992 1306 1939 2031
+Rank 4: AND - Freq: 4103118; Loc (<= 7): 109 441 470 560 594 653 903
+Rank 5: BY - Freq: 1367706; Loc (<= 7): 874 912 1007 2048 2086 2181 3223
+Rank 6: THE - Freq: 7294432; Loc (<= 7): 57 84 191 223 401 426 454
+Rank 7: YOUR - Freq: 3647216; Loc (<= 7): 40 127 151 264 275 545 835
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 0
+IS - Freq: 455902; Loc (<= 7): 804 1978 3153 4327 5502 6676 7851
+LEADING - Freq: 0
+A - Freq: 1367706; Loc (<= 7): 3 763 990 1177 1937 2164 2352
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 1367706; Loc (<= 7): 294 354 1151 1468 1528 2325 2643
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 0
+STUDENTS - Freq: 0
+IN - Freq: 2279510; Loc (<= 7): 124 451 714 987 1174 1298 1625
+THE - Freq: 7294432; Loc (<= 7): 57 84 191 223 401 426 454
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 3647216; Loc (<= 7): 54 81 234 325 363 615 849
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 0
+UNIVERSITY - Freq: 0
+HAS - Freq: 0
+OFFER - Freq: 0
+
+
+
+8. input1g.txt (1021.0MB)
+
+Rank 0: IN - Freq: 3700854; Loc (<= 7): 403 509 633 960 1223 1496 2087
+Rank 1: OF - Freq: 6784899; Loc (<= 7): 17 69 124 563 590 743 834
+Rank 2: RESEARCH - Freq: 4317663; Loc (<= 7): 78 92 159 295 331 420 443
+Rank 3: PROGRAM - Freq: 3700854; Loc (<= 7): 304 352 641 1274 1366 1501 1988
+Rank 4: AND - Freq: 7401708; Loc (<= 7): 181 220 482 618 950 979 1069
+Rank 5: BY - Freq: 2467236; Loc (<= 7): 429 1383 1421 1516 2113 3067 3105
+Rank 6: THE - Freq: 11102562; Loc (<= 7): 254 313 566 593 700 732 910
+Rank 7: YOUR - Freq: 4934472; Loc (<= 7): 549 636 660 773 784 1054 1344
+
+====== ====== ====== ======
+   Starting the query ...
+====== ====== ====== ======
+FSU - Freq: 1233618; Loc (<= 7): 20 127 1704 1811 3388 3495 5072
+IS - Freq: 616809; Loc (<= 7): 1313 2997 4681 6365 8049 9733 11417
+LEADING - Freq: 0
+A - Freq: 1850427; Loc (<= 7): 512 1272 1499 2196 2956 3183 3880
+GROWING - Freq: 0
+MOVEMENT - Freq: 0
+TO - Freq: 2467236; Loc (<= 7): 463 803 863 1660 2147 2487 2547
+INVOLVE - Freq: 0
+UNDERGRADUATE - Freq: 2467236; Loc (<= 7): 24 281 317 406 1708 1965 2001
+STUDENTS - Freq: 1850427; Loc (<= 7): 38 233 367 1722 1917 2051 3406
+IN - Freq: 3700854; Loc (<= 7): 403 509 633 960 1223 1496 2087
+THE - Freq: 11102562; Loc (<= 7): 254 313 566 593 700 732 910
+HIGHEST - Freq: 0
+LEVELS - Freq: 0
+OF - Freq: 6784899; Loc (<= 7): 17 69 124 563 590 743 834
+ACADEMIC - Freq: 0
+ENGAGEMENT - Freq: 0
+HELPING - Freq: 0
+TAKE - Freq: 0
+ADVANTAGE - Freq: 0
+VERY - Freq: 0
+BEST - Freq: 0
+PREEMINENT - Freq: 0
+RESEARCH - Freq: 4317663; Loc (<= 7): 78 92 159 295 331 420 443
+UNIVERSITY - Freq: 616809; Loc (<= 7): 258 1942 3626 5310 6994 8678 10362
+HAS - Freq: 0
+OFFER - Freq: 0
